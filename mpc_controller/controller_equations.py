@@ -47,13 +47,9 @@ def dynamics(q, dq, tau):
     M = calculate_mass_matrix(q)
     C = coriolis_vector(q, dq)
     G = gravity_vector(q)
-    qdd = np.linalg.solve(M, tau - C -G)
+    ddq = np.linalg.solve(M, tau - C -G)
 
-    return qdd
-
-# Define variables necessary for the MPC
-dt = 0.1        # time increment step (s)
-
+    return ddq
 
 # Gives the next step angular_displacement and angular_velocity vector
 def next_step_kinematics(q, dq, ddq):
@@ -68,6 +64,53 @@ def next_step_kinematics(q, dq, ddq):
     q_next = q + dt*dq_next
 
     return q_next, dq_next
+
+# Define variables necessary for the MPC
+dt = 0.1        # time increment step (s)
+N = 100          # number of time steps in the prediction horizon
+
+# Variables for defining a reference trajectory
+w = 2 * np.pi       # angular frequency of the circular trajectory (rad/s)
+r = 0.5             # radius of the circular trajectory (m)
+
+# Generates a reference trajectory for the MPC controller
+def generate_reference_trajectory(dt):
+    """
+    Generates a reference trajectory for the MPC controller.
+    
+    dt: time increment step (s)
+    
+    Returns:
+        x_ref: x-coordinate of the reference trajectory
+        y_ref: y-coordinate of the reference trajectory
+        dx_ref: x-velocity of the reference trajectory
+        dy_ref: y-velocity of the reference trajectory
+    """
+    t = np.arange(0, N*dt, dt)
+    x_ref = r * np.cos(w * t)          # x-coordinate of the reference trajectory
+    y_ref = r * np.sin(w * t)          # y-coordinate of the reference trajectory
+    dx_ref = -r * w * np.sin(w * t)    # x-velocity of the reference trajectory
+    dy_ref = r * w * np.cos(w * t)     # y-velocity of the reference trajectory
+    
+    return x_ref, y_ref, dx_ref, dy_ref
+
+def inverse_kinematics(x, y):
+    """
+    Computes the inverse kinematics for the two-link manipulator.
+    
+    x: x-coordinate of the end-effector
+    y: y-coordinate of the end-effector
+    
+    Returns:
+        q1: angle of the first link
+        q2: angle of the second link
+    """
+    
+    # Calculate angles using inverse kinematics equations
+    q2 = np.arccos((x**2 + y**2 - L1**2 - L2**2) / (2 * L1 * L2))
+    q1 = np.arctan2(y, x) - np.arctan2(L2 * np.sin(q2), L1 + L2 * np.cos(q2))
+    
+    return q1, q2
 
 if __name__ == "__main__":
     angular_displacement = np.array([np.pi/4, 0.75*np.pi])
