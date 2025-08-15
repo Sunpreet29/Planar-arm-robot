@@ -1,5 +1,6 @@
 # MPC controller implementation
 import numpy as np
+import matplotlib.pyplot as plt
 
 # Define the variables already known from the model
 m1 = m2 = 2.5       # link masses (Kg)
@@ -8,8 +9,8 @@ H1 = H2 = 0.05      # link widthsb (m)
 g = 9.81            # acceleration due to gravity (m/s**2)
 
 # Defining inertia values
-I1 = m1*(L1** + H1**2)/12
-I2 = m2*(L2** + H2**2)/12
+I1 = m1*(L1**2 + H1**2)/12
+I2 = m2*(L2**2 + H2**2)/12
 
 # Mass matrix function
 def calculate_mass_matrix(q):
@@ -65,20 +66,21 @@ def next_step_kinematics(q, dq, ddq):
 
     return q_next, dq_next
 
-# Define variables necessary for the MPC
-dt = 0.1        # time increment step (s)
-N = 100          # number of time steps in the prediction horizon
-
 # Variables for defining a reference trajectory
 w = 2 * np.pi       # angular frequency of the circular trajectory (rad/s)
 r = 0.5             # radius of the circular trajectory (m)
+dt = 0.001          # time increment step (s)
 
 # Generates a reference trajectory for the MPC controller
-def generate_reference_trajectory(dt):
+def generate_reference_trajectory(q1_initial, q2_initial, N=900):
     """
     Generates a reference trajectory for the MPC controller.
     
+    q1_initial: initial angle of the first link (rad)
+    q2_initial: initial angle of the second link (rad)
     dt: time increment step (s)
+    N: number of time steps in the prediction horizon
+    T: total simulation time (s)
     
     Returns:
         x_ref: x-coordinate of the reference trajectory
@@ -87,13 +89,12 @@ def generate_reference_trajectory(dt):
         dy_ref: y-velocity of the reference trajectory
     """
     t = np.arange(0, N*dt, dt)
-    x_ref = r * np.cos(w * t)          # x-coordinate of the reference trajectory
-    y_ref = r * np.sin(w * t)          # y-coordinate of the reference trajectory
-    dx_ref = -r * w * np.sin(w * t)    # x-velocity of the reference trajectory
-    dy_ref = r * w * np.cos(w * t)     # y-velocity of the reference trajectory
+    x_ref = r * np.cos(q1_initial + q2_initial + w * t)          # x-coordinate of the reference trajectory
+    y_ref = r * np.sin(q1_initial + q2_initial + w * t)          # y-coordinate of the reference trajectory
     
-    return x_ref, y_ref, dx_ref, dy_ref
+    return x_ref, y_ref
 
+# Calculate angles using inverse kinematics equations
 def inverse_kinematics(x, y):
     """
     Computes the inverse kinematics for the two-link manipulator.
@@ -102,20 +103,31 @@ def inverse_kinematics(x, y):
     y: y-coordinate of the end-effector
     
     Returns:
-        q1: angle of the first link
-        q2: angle of the second link
+        q1: angle of the first link with respect to the horizontal axis
+        q2: angle of the second link with respect to the first link
     """
     
-    # Calculate angles using inverse kinematics equations
     q2 = np.arccos((x**2 + y**2 - L1**2 - L2**2) / (2 * L1 * L2))
     q1 = np.arctan2(y, x) - np.arctan2(L2 * np.sin(q2), L1 + L2 * np.cos(q2))
     
     return q1, q2
 
 if __name__ == "__main__":
-    angular_displacement = np.array([np.pi/4, 0.75*np.pi])
-    angular_velocity = np.array([1, 1])
-    torque = np.array([0.5, 1])
-    
-    angular_acceleration = dynamics(angular_displacement, angular_velocity, torque)
-    a1, a2 = next_step_kinematics(angular_displacement, angular_velocity, angular_acceleration)
+    x_ref, y_ref = generate_reference_trajectory(30*np.pi/180, 10*np.pi/180)
+    q1_trajectory, q2_trajectory = [], []
+    for x, y in zip(x_ref, y_ref):
+        q1, q2 = inverse_kinematics(x, y)
+        print(f"q1: {q1}, q2: {q2}")
+        # q1_trajectory.append(q1)
+        # q2_trajectory.append(q2)
+
+    # q1_trajectory = np.array(q1_trajectory)
+    # q2_trajectory = np.array(q2_trajectory)
+    # q_ref = np.vstack((q1_trajectory, q2_trajectory)).T
+
+    plt.figure(figsize=(6, 6))
+    plt.scatter(x_ref, y_ref, label='Reference Trajectory')
+    plt.plot(0, 0, 'ro', label='Start Point')  # Start point at origin
+    plt.xlim(-0.6, 0.6)
+    plt.ylim(-0.6, 0.6)
+    plt.show()
